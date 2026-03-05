@@ -1,15 +1,12 @@
 from flask import Flask, request, render_template_string
 import sys
 import os
+import io
+from contextlib import redirect_stdout, redirect_stderr
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-try:
-    from GhostTR import track_ip, track_phone, track_username
-except ImportError:
-    def track_ip(ip): return f"[Placeholder] IP Tracking for {ip}\nImplement track_ip function from GhostTR.py"
-    def track_phone(phone): return f"[Placeholder] Phone Tracking for {phone}\nImplement track_phone function from GhostTR.py"
-    def track_username(username): return f"[Placeholder] Username Tracking for {username}\nImplement track_username function from GhostTR.py"
+from GhostTR import IP_Track, phoneGW, TrackLu
 
 app = Flask(__name__)
 
@@ -111,7 +108,7 @@ HTML = """
                 <option value="username">Username Tracker</option>
             </select>
 
-            <label for="target">Target (e.g., 8.8.8.8 / +6281234567890 / nexforgecom):</label>
+            <label for="target">Target (e.g., 8.8.8.8 / +6281234567890 / nexforge):</label>
             <input type="text" name="target" id="target" placeholder="Enter target here..." required>
 
             <button type="submit">Run Tracking</button>
@@ -141,14 +138,38 @@ def home():
 
         if not target:
             result = "Error: Target cannot be empty."
-        elif tool == "ip":
-            result = track_ip(target)
-        elif tool == "phone":
-            result = track_phone(target)
-        elif tool == "username":
-            result = track_username(target)
         else:
-            result = "Error: Invalid tool selection."
+            output = io.StringIO()
+            error_output = io.StringIO()
+            old_input = __builtins__.input
+
+            def mock_input(prompt=""):
+                return target
+
+            try:
+                __builtins__.input = mock_input
+
+                with redirect_stdout(output), redirect_stderr(error_output):
+                    if tool == "ip":
+                        IP_Track()
+                    elif tool == "phone":
+                        phoneGW()
+                    elif tool == "username":
+                        TrackLu()
+                    else:
+                        result = "Error: Invalid tool selection."
+            except Exception as e:
+                result = f"Error during tracking: {str(e)}"
+            finally:
+                __builtins__.input = old_input
+
+            captured = output.getvalue().strip()
+            errors = error_output.getvalue().strip()
+
+            if errors:
+                result = errors + "\n" + captured
+            else:
+                result = captured or "No output captured."
 
     return render_template_string(HTML, result=result)
 
